@@ -10,6 +10,9 @@ venv/
 results/*.md
 !results/.gitkeep
 
+# Cache
+cache/
+
 # IDE
 .vscode/
 .idea/

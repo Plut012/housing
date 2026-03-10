@@ -7,9 +7,68 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from analyzer import ListingAnalyzer
+from analyzer import ListingAnalyzer, AnalysisResult
+from cache import ListingCache
 from config import Requirements
 from scrapers.pararius import ParariusScraper
+
+
+def analyze_with_cache(
+    listings, requirements, analyzer, cache
+) -> list[AnalysisResult]:
+    """
+    Analyze listings using cache to avoid duplicate API calls.
+
+    Args:
+        listings: List of Listing objects to analyze
+        requirements: User requirements
+        analyzer: ListingAnalyzer instance
+        cache: ListingCache instance
+
+    Returns:
+        List of AnalysisResult objects sorted by score
+    """
+    results = []
+    cache_hits = 0
+    cache_misses = 0
+
+    for i, listing in enumerate(listings, 1):
+        # Try cache first
+        cached = cache.get_cached_analysis(listing)
+
+        if cached:
+            print(f"  [{i}/{len(listings)}] ✓ Cached: {listing.title}")
+            cache_hits += 1
+
+            result = AnalysisResult(
+                listing=listing,
+                score=cached["score"],
+                reasoning=cached["reasoning"],
+                is_gem=cached["is_gem"],
+            )
+            results.append(result)
+        else:
+            print(f"  [{i}/{len(listings)}] 🤖 Analyzing: {listing.title}")
+            cache_misses += 1
+
+            try:
+                result = analyzer.analyze(listing, requirements)
+                results.append(result)
+
+                # Store in cache
+                cache.store_analysis(
+                    listing, result.score, result.is_gem, result.reasoning
+                )
+            except Exception as e:
+                print(f"    ❌ Error: {e}")
+                continue
+
+    # Sort by score, highest first
+    results.sort(key=lambda r: r.score, reverse=True)
+
+    print(f"\n💾 Cache: {cache_hits} hits, {cache_misses} API calls")
+
+    return results
 
 
 def main():
@@ -86,15 +145,30 @@ def main():
         print("Consider adjusting your budget range.")
         return
 
-    # Analyze with Claude
+    # Analyze with Claude (using cache)
     print("\n🤖 Analyzing listings with Claude...")
     analyzer = ListingAnalyzer()
+    cache = ListingCache()
 
     try:
-        results = analyzer.analyze_batch(filtered_listings, requirements)
+        results = analyze_with_cache(
+            filtered_listings, requirements, analyzer, cache
+        )
+
+        # Mark all listings as seen
+        all_urls = [listing.url for listing in all_listings]
+        cache.mark_seen(all_urls)
+
+        # Show cache stats
+        stats = cache.get_stats()
+        print(f"\n📊 Cache stats: {stats['total_listings']} total listings, "
+              f"{stats['total_gems']} gems (avg score: {stats['avg_score']})")
+
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         return
+    finally:
+        cache.close()
 
     # Output results
     print("\n" + "=" * 80)
