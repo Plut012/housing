@@ -1,0 +1,13 @@
+[project]
+name = "housing-finder"
+version = "0.1.0"
+description = "AI-powered Dutch rental listing finder"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "lxml>=5.0.0",
+]
